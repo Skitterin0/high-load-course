@@ -63,6 +63,7 @@ class PaymentExternalSystemAdapterImpl(
 
         val retryManager = RetryManager(3, 10)
         do {
+            var retryAfter: Long? = null
             try {
                 while (semaphore.putIntoWindow() is NonBlockingOngoingWindow.WindowResponse.Fail) {}
 
@@ -80,8 +81,8 @@ class PaymentExternalSystemAdapterImpl(
                         ExternalSysResponse(transactionId.toString(), paymentId.toString(), false, e.message)
                     }
 
-                    if (!body.result) {
-                        logger.error("sosal ${response}")
+                    if (!response.isSuccessful && (response.code == 429 || response.code == 500)) {
+                        retryAfter = response.headers["Retry-After"]?.toLong()
                     }
 
                     logger.warn("[$accountName] Payment processed for txId: $transactionId, payment: $paymentId, succeeded: ${body.result}, message: ${body.message}")
@@ -113,7 +114,7 @@ class PaymentExternalSystemAdapterImpl(
             } finally {
                 semaphore.releaseWindow()
             }
-        } while (retryManager.retry())
+        } while (retryManager.retry(retryAfter))
     }
 
     override fun price() = properties.price
@@ -134,9 +135,9 @@ private class RetryManager(
     private var retryCounter: Int = 0
     private var isSuccess: Boolean = false
 
-    fun retry(): Boolean {
+    fun retry(retryAfter: Long?): Boolean {
         if (!isSuccess && retryCounter < retryLimit) {
-            val delayTime = (delayMillis * factor.pow(retryCounter.toDouble())).toLong()
+            val delayTime = retryAfter?: (delayMillis * factor.pow(retryCounter.toDouble())).toLong()
             retryCounter++
             Thread.sleep(delayTime)
             return true
