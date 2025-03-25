@@ -65,7 +65,7 @@ class PaymentExternalSystemAdapterImpl(
         do {
             var retryAfter: Long? = null
             try {
-                while (semaphore.putIntoWindow() is NonBlockingOngoingWindow.WindowResponse.Fail) {}
+                while (semaphore.putIntoWindow() is NonBlockingOngoingWindow.WindowResponse.Fail)
 
                 slidingLimiter.tickBlocking()
 
